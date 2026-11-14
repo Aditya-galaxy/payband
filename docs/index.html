@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payband · am I underpaid?</title>
+<meta name="description" content="Pay bands from salaries nobody can see. Each salary is encrypted in the browser to an attested NEAR AI enclave; only the bands come out, checked on NEAR.">
+<meta property="og:title" content="Payband: am I underpaid? Nobody reveals their salary.">
+<meta property="og:description" content="Salaries are encrypted to an attested NEAR AI enclave; only pay bands come out, and NEAR verifies the enclave's signature.">
+<meta property="og:image" content="https://aditya-galaxy.github.io/payband/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0b0a10">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b69cff' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M4 7h16M4 12h10M4 17h6'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0b0a10; --panel: #13121a; --panel2: #1b1a24; --line: #272533; --line2: #363345;
+    --text: #efedf5; --muted: #9b97ab; --faint: #6a667a;
+    --acc: #b69cff; --acc2: #7c5cff; --ok: #3ddc97; --warn: #ffb648; --bad: #ff6b6b; --info: #74b9ff;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font: 15px/1.55 var(--sans); -webkit-font-smoothing: antialiased;
+    background-image: radial-gradient(900px 420px at 50% -140px, rgba(124,92,255,.16), transparent 70%); background-repeat: no-repeat; }
+  a { color: var(--acc); text-decoration: none; } a:hover { text-decoration: underline; }
+  code { font: 12.5px var(--mono); background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 16px 64px; }
+  header { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 16px 0; }
+  .logo { font-weight: 750; font-size: 19px; letter-spacing: -.015em; display: flex; align-items: center; gap: 9px; color: var(--text); }
+  .logo:hover { text-decoration: none; } .logo svg { width: 22px; height: 22px; color: var(--acc); }
+  .links { display: flex; gap: 16px; font-size: 14px; } .links a { color: var(--muted); } .links a:hover { color: var(--text); text-decoration: none; }
+  .spacer { flex: 1; }
+  .me { font: 12px var(--mono); color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .me b { color: var(--text); }
+  .hero { padding: 24px 0 26px; }
+  .eyebrow { font: 600 11.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--acc); margin-bottom: 14px; }
+  .h { font-size: clamp(34px, 6vw, 56px); line-height: 1.04; letter-spacing: -.035em; margin: 0 0 16px; font-weight: 760; }
+  .h em { font-style: normal; color: var(--acc); }
+  .lede { font-size: clamp(16px, 2.1vw, 19px); color: #c3bfd2; max-width: 720px; margin: 0; line-height: 1.5; }
+  .lede b { color: var(--text); font-weight: 600; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 20px; font-size: 13px; color: var(--muted); }
+  .flow span { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; }
+  .flow i { font-style: normal; color: var(--faint); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-bottom: 16px; }
+  h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin: 0 0 14px; font-weight: 650; }
+  h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -.02em; }
+  .sub { color: var(--muted); font: 12.5px var(--mono); overflow-wrap: anywhere; }
+  .status { display: inline-flex; align-items: center; gap: 7px; font: 650 11.5px var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 5px 10px; border-radius: 999px; border: 1px solid currentColor; }
+  .st-open { color: var(--warn); } .st-closed { color: var(--info); } .st-published { color: var(--ok); }
+  .roundtop { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px 22px; margin-top: 18px; }
+  .k { color: var(--faint); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; }
+  .v { font: 13px var(--mono); overflow-wrap: anywhere; margin-top: 2px; }
+  .roles { display: grid; gap: 8px; margin-top: 18px; }
+  .rolerow { display: grid; grid-template-columns: 160px 1fr 110px; gap: 12px; align-items: center; font-size: 14px; }
+  .dots { display: flex; gap: 4px; flex-wrap: wrap; } .dots i { width: 14px; height: 14px; border-radius: 4px; background: var(--panel2); border: 1px solid var(--line2); }
+  .dots i.on { background: var(--acc2); border-color: var(--acc); } .dots i.k { outline: 1px dashed var(--faint); outline-offset: 2px; }
+  .tag { font: 600 11px var(--mono); text-align: right; } .tag.ok { color: var(--ok); } .tag.no { color: var(--faint); }
+  .bands { display: grid; gap: 22px; }
+  .band .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .band b { font-size: 16px; } .band .n { color: var(--muted); font: 12px var(--mono); }
+  .scale { position: relative; height: 38px; margin-top: 10px; background: var(--panel2); border-radius: 9px; border: 1px solid var(--line); }
+  .range { position: absolute; top: 7px; bottom: 7px; background: linear-gradient(90deg, rgba(124,92,255,.55), rgba(182,156,255,.75)); border-radius: 6px; }
+  .med { position: absolute; top: 3px; bottom: 3px; width: 3px; background: #fff; border-radius: 2px; transform: translateX(-1.5px); }
+  .you { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--warn); transform: translateX(-1px); }
+  .you::after { content: 'you'; position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font: 600 11px var(--mono); color: var(--warn); }
+  .ticks { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted); margin-top: 6px; }
+  .ticks b { color: var(--text); font-size: 13px; }
+  .hidden { color: var(--faint); font-size: 14px; border: 1px dashed var(--line2); border-radius: 10px; padding: 12px 14px; }
+  .mine { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .mine p { margin: 0; color: var(--muted); font-size: 13.5px; flex-basis: 100%; }
+  .verdict { font-size: 15px; font-weight: 600; }
+  input, select { background: var(--panel2); border: 1px solid var(--line2); color: var(--text); border-radius: 9px; padding: 10px 12px; font: 14px var(--mono); min-width: 0; }
+  input:focus, select:focus { outline: 2px solid var(--acc); outline-offset: -1px; }
+  button { font-family: var(--sans); background: var(--text); color: #0b0a10; border: 0; border-radius: 9px; padding: 10px 16px; font-weight: 650; cursor: pointer; }
+  button.acc { background: var(--acc); }
+  button:disabled { opacity: .6; cursor: progress; }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--line2); padding: 8px 12px; font-size: 12.5px; }
+  .btn-ghost:hover { border-color: var(--text); }
+  .form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; margin-top: 12px; }
+  .form label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+  .steps { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; font: 12.5px var(--mono); }
+  .steps li::before { content: '○ '; color: var(--faint); } .steps li.done::before { content: '✓ '; color: var(--ok); } .steps li.bad::before { content: '✗ '; color: var(--bad); }
+  .steps li.done { color: var(--text); } .steps li.bad { color: var(--bad); } .steps li { color: var(--muted); overflow-wrap: anywhere; }
+  .checks .steps { font-size: 13px; }
+  .note { color: var(--muted); font-size: 13.5px; margin: 0; }
+  .sect { margin: 44px 0 16px; } .sect h3 { font-size: 24px; letter-spacing: -.02em; margin: 0 0 6px; } .sect p { color: var(--muted); margin: 0; max-width: 700px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px; } .cols .card { margin: 0; } .cols p { color: var(--muted); font-size: 13.5px; margin: 0; }
+  .cols b { color: var(--text); }
+  .live { font: 12px var(--mono); color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: pulse 2s infinite; } .dot.err { background: var(--bad); animation: none; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: #1d1533; border: 1px solid var(--acc); color: var(--text);
+    padding: 12px 18px; border-radius: 11px; font-size: 14px; box-shadow: 0 10px 34px rgba(0,0,0,.55); z-index: 5; max-width: calc(100vw - 32px); }
+  .toast.err { background: #2a1414; border-color: var(--bad); }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line2); border-radius: 16px; padding: 24px; max-width: min(620px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0,0,0,.62); }
+  dialog p { color: var(--muted); font-size: 13.5px; margin: 0 0 10px; }
+  dialog label { display: block; font-size: 12px; color: var(--muted); margin-top: 12px; } dialog input { display: block; width: 100%; margin-top: 4px; }
+  dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  pre { background: #08070c; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 12px/1.5 var(--mono); color: #cfcadd; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+  footer { color: var(--faint); font-size: 12.5px; margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line); line-height: 1.7; }
+  body.embed .hero, body.embed .links, body.embed .sect, body.embed .cols { display: none; }
+  @media (max-width: 640px) { .rolerow { grid-template-columns: 1fr auto; } .rolerow .dots { grid-column: 1 / -1; order: 3; } .form { grid-template-columns: 1fr; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="logo" href="./"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h6"/></svg>Payband</a>
+    <nav class="links"><a href="#how">How it works</a><a href="#verify">Verify</a><a href="https://github.com/Aditya-galaxy/payband" target="_blank" rel="noopener">GitHub</a></nav>
+    <div class="spacer"></div>
+    <div class="me" id="me"></div>
+  </header>
+
+  <section class="hero">
+    <div class="eyebrow">Built at NEAR Hackathon · live on testnet</div>
+    <div class="h" role="heading" aria-level="1">Am I underpaid?<br><em>Nobody reveals their salary.</em></div>
+    <p class="lede"><b>Each person's salary is encrypted in their own browser to a model running in an attested enclave on NEAR AI Cloud.</b> Only pay bands come out, and only for groups of at least four. A NEAR contract checks the enclave's signature before it will publish anything.</p>
+    <div class="flow"><span>Your browser encrypts</span><i>→</i><span>ciphertext stored on NEAR</span><i>→</i><span>one sealed request to the enclave</span><i>→</i><span>signed bands, verified on chain</span></div>
+  </section>
+
+  <div id="out"><div class="card">Loading…</div></div>
+
+  <div class="sect" id="how"><h3>Who can see what</h3><p>The point is what nobody gets to see.</p></div>
+  <div class="cols">
+    <div class="card"><h2>Your employer, the organiser, us</h2><p>Only ciphertext. Your salary is encrypted before it leaves your browser, to a key that exists only inside the model's enclave. Your <b>role</b> is public so the contract can count groups; your salary is not.</p></div>
+    <div class="card"><h2>The enclave</h2><p>Decrypts every record, computes the 25th percentile, median and 75th percentile per role, and returns only those. Its key is bound to an Intel TDX + NVIDIA attestation you can check yourself.</p></div>
+    <div class="card"><h2>The NEAR contract</h2><p>Refuses a result unless the enclave signed it, the request contained <b>every</b> submission, and each published group has at least four people. Smaller groups are never shown.</p></div>
+  </div>
+
+  <div class="sect"><h3>What is real, and what is next</h3><p>Stated plainly.</p></div>
+  <div class="cols">
+    <div class="card"><h2>Real today</h2><p>Browser encryption to NEAR AI Cloud's attested model key, ciphertexts on NEAR testnet, one end-to-end encrypted request to the model, on-chain ed25519 check of its signature, the k-anonymity rule, and in-browser verification of everything on this page.</p></div>
+    <div class="card"><h2>Trusted, for now</h2><p>The model does the arithmetic, and a language model can get it wrong. The bands are checked against the signed reply, not recomputed. Attestation is checked for a fresh nonce here; the full Intel/NVIDIA quote check is NEAR AI's verifier. Demo salaries are made up.</p></div>
+    <div class="card"><h2>Next</h2><p>Run the percentile code itself in an attested enclave (deterministic, no model), coarser bands for small groups, and payroll-signed salary proofs so nobody can inflate their own number.</p></div>
+  </div>
+
+  <footer>
+    Contract <a id="clink" target="_blank" rel="noopener"></a> on NEAR testnet · model inference on <a href="https://cloud.near.ai" target="_blank" rel="noopener">NEAR AI Cloud</a> · <span class="live"><span class="dot" id="dot"></span><span id="live">connecting…</span></span><br>
+    Demo organisation “Acme” and its salaries are made up. Not audited. <a href="https://github.com/Aditya-galaxy/payband" target="_blank" rel="noopener">Source on GitHub</a>. Sister project by the same author: <a href="https://aditya-galaxy.github.io/sureplate/" target="_blank" rel="noopener">Sureplate</a>.
+  </footer>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<dialog id="keydlg">
+  <form id="keyform">
+    <h2>Sign in with a submit-only key</h2>
+    <p>Add an access key to your account that can do one thing: call <code>submit</code> on this contract. It cannot move your NEAR beyond gas. The page checks that on chain before accepting it and keeps it in this browser only.</p>
+    <pre id="kcmd"></pre>
+    <label>Account id<input id="kacct" placeholder="you.testnet" autocomplete="off" spellcheck="false" required></label>
+    <label>The key the command printed (SECRET KEYPAIR)<input id="ksecret" type="password" placeholder="ed25519:…" autocomplete="off" required></label>
+    <div id="keyerr" class="sub" style="margin-top:10px;min-height:1.4em;color:var(--warn)"></div>
+    <div class="row"><button type="button" class="btn-ghost" id="kcancel">Cancel</button><button>Sign in</button></div>
+  </form>
+</dialog>
+
+<script src="vendor/near-api-js-4.0.4.min.js"></script>
+<script type="module">
+import { ed25519, edwardsToMontgomeryPub, edwardsToMontgomeryPriv, x25519 } from 'https://esm.sh/@noble/curves@1.9.7/ed25519';
+import { hkdf } from 'https://esm.sh/@noble/hashes@1.8.0/hkdf';
+import { sha256 } from 'https://esm.sh/@noble/hashes@1.8.0/sha2';
+import { bytesToHex, hexToBytes, utf8ToBytes } from 'https://esm.sh/@noble/hashes@1.8.0/utils';
+import { xchacha20poly1305 } from 'https://esm.sh/@noble/ciphers@1.3.0/chacha';
+
+const params = new URLSearchParams(location.search);
+const CONTRACT = params.get('contract') || 'payband.testnet';
+const RPCS = ['https://test.rpc.fastnear.com', 'https://near-testnet.drpc.org', 'https://rpc.testnet.fastnear.com'];
+const EXPLORER = 'https://testnet.nearblocks.io';
+const NEARAI = 'https://cloud-api.near.ai';
+const DEFAULT_ROUND = 'acme-2026';
+let roundId = params.get('round') || DEFAULT_ROUND;
+let rpcIdx = 0, round = null, outcome = null, subs = [], verified = null, lastSig = '', mySalary = null;
+if (params.get('embed')) document.body.classList.add('embed');
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money = n => '$' + Math.round(n / 1000) + 'k';
+const when = s => new Date(s * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const INFO = utf8ToBytes('ed25519_encryption');
+const sha = s => bytesToHex(sha256(utf8ToBytes(s)));
+
+function encryptFor(keyHex, text) {
+  const eph = x25519.utils.randomPrivateKey();
+  const k = hkdf(sha256, x25519.getSharedSecret(eph, edwardsToMontgomeryPub(hexToBytes(keyHex))), undefined, INFO, 32);
+  const nonce = crypto.getRandomValues(new Uint8Array(24));
+  const ct = xchacha20poly1305(k, nonce).encrypt(utf8ToBytes(text));
+  const out = new Uint8Array(56 + ct.length); out.set(x25519.getPublicKey(eph)); out.set(nonce, 32); out.set(ct, 56);
+  return bytesToHex(out);
+}
+function decryptWith(secretHex, hex) {
+  const d = hexToBytes(hex);
+  const k = hkdf(sha256, x25519.getSharedSecret(edwardsToMontgomeryPriv(hexToBytes(secretHex)), d.slice(0, 32)), undefined, INFO, 32);
+  return new TextDecoder().decode(xchacha20poly1305(k, d.slice(32, 56)).decrypt(d.slice(56)));
+}
+
+async function rpc(method, p) {
+  for (let i = 0; i < RPCS.length; i++) {
+    try {
+      const r = await fetch(RPCS[rpcIdx], { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: p }) });
+      const j = await r.json(); if (j.result) return j.result; throw new Error(JSON.stringify(j.error || j).slice(0, 200));
+    } catch (e) { rpcIdx = (rpcIdx + 1) % RPCS.length; if (i === RPCS.length - 1) throw e; }
+  }
+}
+async function view(method, args) {
+  const r = await rpc('query', { request_type: 'call_function', finality: 'optimistic', account_id: CONTRACT, method_name: method, args_base64: btoa(JSON.stringify(args)) });
+  if (r.error) throw new Error(r.error);
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(r.result)));
+}
+function toast(html, bad) { const t = $('toast'); t.innerHTML = html; t.className = 'toast' + (bad ? ' err' : ''); t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 9000); }
+
+// ── sign-in: a key that can only call `submit`, or a wallet via NEAR Connect ──
+let me = null, mode = null, keyWallet = null, connector = null;
+async function initWallet() {
+  try {
+    const conn = await nearApi.connect({ networkId: 'testnet', nodeUrl: RPCS[0], keyStore: new nearApi.keyStores.BrowserLocalStorageKeyStore() });
+    keyWallet = new nearApi.WalletConnection(conn, 'payband');
+    if (keyWallet.isSignedIn()) { me = keyWallet.getAccountId(); mode = 'key'; }
+  } catch (e) { keyWallet = null; }
+  renderMe();
+  try {
+    const { NearConnector } = await import('https://esm.sh/@hot-labs/near-connect@0.12.0');
+    connector = new NearConnector({ network: 'testnet' });
+    connector.on('wallet:signIn', t => { if (mode !== 'key') { me = t.accounts[0].accountId; mode = 'wallet'; renderMe(); render(true); } });
+    connector.on('wallet:signOut', () => { if (mode === 'wallet') { me = null; mode = null; renderMe(); render(true); } });
+    if (!me) { const c = await connector.getConnectedWallet().catch(() => null); if (c?.accounts?.length) { me = c.accounts[0].accountId; mode = 'wallet'; } }
+  } catch (e) { connector = null; }
+  renderMe();
+}
+function renderMe() {
+  $('me').innerHTML = me ? `<b>${esc(me)}</b><button class="btn-ghost" id="signout">Sign out</button>`
+    : `${connector ? '<button class="btn-ghost" id="signin">Connect wallet</button>' : ''}${keyWallet ? '<button class="btn-ghost" id="usekey">Use a submit-only key</button>' : ''}`;
+}
+async function useKey(account, secret) {
+  const pk = nearApi.KeyPair.fromString(secret).getPublicKey().toString();
+  const k = await rpc('query', { request_type: 'view_access_key', finality: 'optimistic', account_id: account, public_key: pk }).catch(() => null);
+  if (!k || k.error) throw new Error('that key is not on ' + account);
+  const fc = k.permission?.FunctionCall;
+  if (!fc) throw new Error('that is a full-access key. This page only accepts a key limited to submit.');
+  if (fc.receiver_id !== CONTRACT || fc.method_names.length !== 1 || fc.method_names[0] !== 'submit') throw new Error('that key is not limited to submit on ' + CONTRACT);
+  localStorage.setItem('payband_wallet_auth_key', JSON.stringify({ accountId: account, allKeys: [pk] }));
+  localStorage.setItem(`near-api-js:keystore:${account}:testnet`, secret);
+  location.reload();
+}
+async function sendSubmit(args) {
+  if (mode === 'key') return (await keyWallet.account().functionCall({ contractId: CONTRACT, methodName: 'submit', args, gas: 30000000000000n, attachedDeposit: 0n }))?.transaction?.hash || '';
+  const w = await connector.wallet();
+  return (await w.signAndSendTransaction({ receiverId: CONTRACT, actions: [{ type: 'FunctionCall', params: { methodName: 'submit', args, gas: '30000000000000', deposit: '0' } }] }))?.transaction?.hash || '';
+}
+
+// ── attestation: fetch with a fresh nonce; the round's key must be among the answers ──
+async function attested(model, key) {
+  const nonce = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+  const q = new URLSearchParams({ model, provider: 'near', signing_algo: 'ed25519', include_tls_fingerprint: 'false', nonce });
+  const rep = await (await fetch(`${NEARAI}/v1/attestation/report?${q}`, { headers: { 'x-no-aliasing': 'true' } })).json();
+  const c = (rep.model_attestations || []).filter(m => m.request_nonce === nonce && m.signing_public_key === key && m.intel_quote);
+  return { ok: c.length > 0, count: c.length, instance: c[0]?.info };
+}
+
+// ── in-browser verification of a published result ──
+async function verify() {
+  const o = outcome, steps = [];
+  const add = (ok, text) => steps.push([ok, text]);
+  add(sha(o.request_body) === o.request_hash, `request hashes to ${o.request_hash.slice(0, 16)}…`);
+  add(sha(o.response_body) === o.response_hash, `response hashes to ${o.response_hash.slice(0, 16)}…`);
+  const missing = subs.filter(s => !o.request_body.includes(s.ciphertext)).length;
+  add(missing === 0, `request contains all ${subs.length} on-chain ciphertexts`);
+  const text = `${round.model}:${o.request_hash}:${o.response_hash}`;
+  let sigOk = false; try { sigOk = ed25519.verify(hexToBytes(o.signature), utf8ToBytes(text), hexToBytes(round.model_key)); } catch (e) {}
+  add(sigOk, `model signature verifies under the round key ${round.model_key.slice(0, 12)}…`);
+  let same = false, reply = '';
+  try {
+    reply = decryptWith(o.client_secret, JSON.parse(o.response_body).choices[0].message.content);
+    const b = JSON.parse(reply.replace(/^```(json)?|```$/g, '').trim()).bands;
+    same = JSON.stringify(b) === JSON.stringify(o.bands);
+  } catch (e) {}
+  add(same, 'decrypted signed reply equals the published bands');
+  const a = await attested(round.model, round.model_key).catch(() => ({ ok: false }));
+  add(a.ok, a.ok ? `key is attested right now (fresh nonce, ${a.count} TEE instance(s))` : 'could not confirm the key is attested right now');
+  verified = { steps, reply };
+  render(true);
+}
+
+function bandHtml(b, lo, hi) {
+  const x = v => ((v - lo) / (hi - lo) * 100).toFixed(2) + '%';
+  const you = mySalary && mySalary.role === b.role ? `<i class="you" style="left:${x(Math.min(hi, Math.max(lo, mySalary.v)))}"></i>` : '';
+  return `<div class="band"><div class="top"><b>${esc(b.role)}</b><span class="n">${b.count} people</span></div>
+    <div class="scale"><i class="range" style="left:${x(b.p25)};width:calc(${x(b.p75)} - ${x(b.p25)})"></i><i class="med" style="left:${x(b.median)}"></i>${you}</div>
+    <div class="ticks"><span>25th ${money(b.p25)}</span><span>median <b>${money(b.median)}</b></span><span>75th ${money(b.p75)}</span></div></div>`;
+}
+
+function render(force) {
+  const r = round; if (!r) return;
+  const sig = JSON.stringify([r.status, r.counts, r.submitted, !!outcome, me, verified?.steps?.length, mySalary]);
+  if (!force && sig === lastSig) { tickClock(); return; } lastSig = sig;
+  const now = Date.now() / 1000;
+  const isMember = me && r.members.includes(me), done = me && r.submitted.includes(me);
+  let body = `<div class="card"><div class="roundtop"><div><h1>${esc(r.title)}</h1><div class="sub">round ${esc(roundId)} · ${r.members.length} people invited · groups of ${r.k_min}+ only</div></div>
+    <span class="status st-${r.status}">${r.status === 'open' ? `open · closes in <span id="clock"></span>` : esc(r.status)}</span></div>
+    <div class="roles">${r.counts.map(([role, n]) => `<div class="rolerow"><span>${esc(role)}</span><span class="dots">${Array.from({ length: Math.max(n, r.k_min) }, (_, i) => `<i class="${i < n ? 'on' : ''} ${i === r.k_min - 1 ? 'k' : ''}"></i>`).join('')}</span><span class="tag ${n >= r.k_min ? 'ok' : 'no'}">${n >= r.k_min ? `${n} · will be shown` : `${n} · hidden (<${r.k_min})`}</span></div>`).join('')}</div>
+    <div class="grid">
+      <div><div class="k">Enclave model</div><div class="v">${esc(r.model)} on NEAR AI Cloud</div></div>
+      <div><div class="k">Attested model key</div><div class="v">${esc(r.model_key.slice(0, 20))}… <a href="https://cloud.near.ai/verify" target="_blank" rel="noopener">verify ↗</a></div></div>
+      <div><div class="k">Submissions</div><div class="v">${r.submitted.length} of ${r.members.length} · <a href="${EXPLORER}/address/${CONTRACT}" target="_blank" rel="noopener">on chain ↗</a></div></div>
+      <div><div class="k">Closes</div><div class="v">${when(r.closes_at)}</div></div>
+    </div>`;
+  if (r.status === 'open') {
+    if (!me) body += `<p class="note" style="margin-top:18px">Members of this round sign in to submit. Anyone can watch.</p>`;
+    else if (!isMember) body += `<p class="note" style="margin-top:18px">${esc(me)} is not on this round's member list.</p>`;
+    else body += `<div class="mine" style="display:block"><b>${done ? 'You have submitted. You can replace it until the round closes.' : 'Add your salary'}</b>
+      <form class="form" id="subform"><label>Role<select id="srole">${r.roles.map(x => `<option>${esc(x)}</option>`).join('')}</select></label>
+      <label>Annual salary (${esc(r.currency)})<input id="ssal" inputmode="numeric" placeholder="e.g. 128000" required></label>
+      <label>&nbsp;<button class="acc" id="sbtn">Encrypt &amp; submit</button></label></form>
+      <ul class="steps" id="ssteps"></ul></div>`;
+  }
+  body += `</div>`;
+  if (r.status === 'closed') body += `<div class="card"><h2>Waiting for the enclave</h2><p class="note">The round is closed. The next step sends all ${r.submitted.length} ciphertexts to the model in one sealed request; the contract only accepts the result if the model's signature checks out.</p></div>`;
+  if (outcome) {
+    const vals = outcome.bands.flatMap(b => [b.p25, b.p75]).concat(mySalary ? [mySalary.v] : []);
+    const lo = Math.floor(Math.min(...vals) * 0.9 / 10000) * 10000, hi = Math.ceil(Math.max(...vals) * 1.05 / 10000) * 10000;
+    body += `<div class="card"><h2>Pay bands · ${esc(r.currency)} · from the enclave</h2><div class="bands">${outcome.bands.map(b => bandHtml(b, lo, hi)).join('')}
+      ${outcome.suppressed.map(s => `<div class="hidden"><b>${esc(s)}</b> · fewer than ${r.k_min} people, so no band is published. The contract refuses one.</div>`).join('')}</div>
+      <div class="mine"><p>Where do you stand? This stays in your browser.</p>
+        <select id="mrole">${outcome.bands.map(b => `<option ${mySalary?.role === b.role ? 'selected' : ''}>${esc(b.role)}</option>`).join('')}</select>
+        <input id="msal" inputmode="numeric" placeholder="your salary" value="${mySalary ? mySalary.v : ''}" style="width:150px"><button class="btn-ghost" id="mbtn">Compare</button>
+        <span class="verdict" id="mverdict">${mySalary ? verdict() : ''}</span></div></div>
+      <div class="card checks" id="verify"><h2>Verify this result yourself</h2>
+        <p class="note">Everything below runs in your browser against data on NEAR: the exact request and reply, the model's signature, and the throwaway key the reply was encrypted to.</p>
+        ${verified ? `<ul class="steps">${verified.steps.map(([ok, t]) => `<li class="${ok ? 'done' : 'bad'}">${esc(t)}</li>`).join('')}</ul>
+          <details style="margin-top:12px"><summary class="sub">decrypted enclave reply</summary><pre>${esc(verified.reply)}</pre></details>`
+        : `<button class="acc" id="vbtn" style="margin-top:12px">Run the checks</button>`}
+        <div class="sub" style="margin-top:12px">published by ${esc(outcome.publisher)} · ${when(outcome.published_at)}</div></div>`;
+  }
+  $('out').innerHTML = body; tickClock();
+}
+function verdict() {
+  const b = outcome.bands.find(x => x.role === mySalary.role); if (!b) return '';
+  const v = mySalary.v;
+  if (v < b.p25) return `<span style="color:var(--warn)">Below the 25th percentile for ${esc(b.role)}.</span>`;
+  if (v > b.p75) return `<span style="color:var(--ok)">Above the 75th percentile.</span>`;
+  return `Inside the middle half. ${v < b.median ? 'Below' : 'At or above'} the median.`;
+}
+function tickClock() { const c = $('clock'); if (c && round) { const s = Math.max(0, Math.round(round.closes_at - Date.now() / 1000)); c.textContent = s > 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor(s % 3600 / 60) + 'm' : Math.floor(s / 60) + 'm ' + (s % 60) + 's'; } }
+
+async function load() {
+  try {
+    round = await view('get_round', { round_id: roundId });
+    if (!round) { $('out').innerHTML = `<div class="card">No round “${esc(roundId)}” on ${esc(CONTRACT)}.</div>`; return; }
+    if (round.status === 'published' && !outcome) { outcome = await view('get_outcome', { round_id: roundId }); subs = await view('get_submissions', { round_id: roundId }); }
+    render(); $('dot').className = 'dot'; $('live').textContent = 'live · ' + new Date().toLocaleTimeString();
+  } catch (e) { $('dot').className = 'dot err'; $('live').textContent = 'rpc error, retrying'; }
+}
+
+document.addEventListener('click', async e => {
+  const id = e.target.id;
+  if (id === 'signin') connector.connect().catch(err => toast('Wallet: ' + esc(String(err?.message || err).slice(0, 160)), true));
+  else if (id === 'usekey') $('keydlg').showModal();
+  else if (id === 'kcancel') $('keydlg').close();
+  else if (id === 'signout') { if (mode === 'key') { keyWallet.signOut(); me = null; mode = null; renderMe(); render(true); } else connector.disconnect().catch(() => {}); }
+  else if (id === 'vbtn') { e.target.disabled = true; e.target.textContent = 'Checking…'; await verify(); }
+  else if (id === 'mbtn') { const v = Number(String($('msal').value).replace(/[^\d.]/g, '')); if (v > 0) { mySalary = { role: $('mrole').value, v }; render(true); } }
+});
+document.addEventListener('submit', async e => {
+  if (e.target.id === 'keyform') {
+    e.preventDefault(); $('keyerr').textContent = 'Checking the key on chain…';
+    try { await useKey($('kacct').value.trim(), $('ksecret').value.trim()); } catch (x) { $('keyerr').textContent = 'Not accepted: ' + String(x?.message || x).slice(0, 200); }
+  } else if (e.target.id === 'subform') {
+    e.preventDefault();
+    const salary = Number(String($('ssal').value).replace(/[^\d.]/g, '')), role = $('srole').value;
+    const steps = $('ssteps'), step = (t, c = 'done') => { steps.insertAdjacentHTML('beforeend', `<li class="${c}">${esc(t)}</li>`); };
+    if (!(salary > 1000 && salary < 10000000)) { step('enter an annual salary', 'bad'); return; }
+    $('sbtn').disabled = true; steps.innerHTML = '';
+    try {
+      const a = await attested(round.model, round.model_key);
+      if (!a.ok) throw new Error('the round key is not attested right now; not sending');
+      step(`model key ${round.model_key.slice(0, 12)}… is attested (fresh nonce)`);
+      const ciphertext = encryptFor(round.model_key, JSON.stringify({ role, salary_usd: Math.round(salary) }));
+      step(`encrypted in this browser → ${ciphertext.slice(0, 28)}… (${ciphertext.length / 2} bytes)`);
+      const hash = await sendSubmit({ round_id: roundId, role, ciphertext });
+      step(`stored on NEAR · tx ${hash.slice(0, 10)}…`);
+      $('ssal').value = ''; lastSig = ''; await load();
+    } catch (x) { step(String(x?.kind?.ExecutionError || x?.message || x).slice(0, 200), 'bad'); $('sbtn').disabled = false; }
+  }
+});
+
+$('kcmd').textContent = `near account add-key you.testnet grant-function-call-access --allowance '0.25 NEAR' --contract-account-id ${CONTRACT} --function-names submit autogenerate-new-keypair print-to-terminal network-config testnet sign-with-legacy-keychain send`;
+$('clink').textContent = CONTRACT; $('clink').href = `${EXPLORER}/address/${CONTRACT}`;
+setInterval(tickClock, 1000);
+initWallet().then(() => { load(); setInterval(load, 5000); });
+</script>
+</body>
+</html>
