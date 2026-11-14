@@ -10,7 +10,8 @@ const staff = [
   ['eli', 'Engineer L3', 152000], ['fay', 'Engineer L3', 147000], ['gus', 'Engineer L3', 168000], ['hana', 'Engineer L3', 159000],
   ['ivo', 'Staff Engineer', 205000],
 ];
-for (const [name, role, salary] of staff.slice(0, Number(process.env.ONLY || staff.length))) {
+const skip = (process.env.SKIP || '').split(',');
+for (const [name, role, salary] of staff.slice(0, Number(process.env.ONLY || staff.length)).filter(([n]) => !skip.includes(n))) {
   const member = `${name}.acme-cam.testnet`;
   const ciphertext = encryptFor(round.model_key, JSON.stringify({ role, salary_usd: salary }));
   const tx = call(member, 'submit', { round_id: roundId, role, ciphertext });

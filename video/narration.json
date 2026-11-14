@@ -1,0 +1,13 @@
+{
+  "voice": "en-US-Chirp3-HD-Charon",
+  "lines": {
+    "intro":   "Am I underpaid? Everyone wants to know, and nobody wants to say their salary. Payband answers the first question without the second.",
+    "ana":     "Ana is an engineer at Acme. She types her salary. Her browser checks the enclave's attestation, encrypts the number to the model's key, and stores only ciphertext on NEAR.",
+    "others":  "Her colleagues do the same. The contract counts each role, but the Staff Engineer group has only one person, so it will never get a band.",
+    "close":   "The round closes. Every ciphertext goes to a model inside an attested enclave on NEAR AI Cloud, in one sealed request.",
+    "bands":   "Only the bands come out. The NEAR contract accepted them because the enclave's signature verified, and no submission was left out.",
+    "verify":  "Anyone can check that, right here in the browser.",
+    "mine":    "And Ana finally knows where she stands. Her salary never left her browser unencrypted.",
+    "outro":   "Payband. Know your worth, without showing it. Built at the NEAR Hackathon."
+  }
+}

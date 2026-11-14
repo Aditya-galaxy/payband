@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><style>html,body{margin:0;width:1280px;height:720px;background:#0b0a10;color:#efedf5;font-family:-apple-system,Inter,sans-serif;overflow:hidden}
+body{background-image:radial-gradient(900px 420px at 50% -120px,rgba(124,92,255,.26),transparent 70%)}
+.c{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:0 110px}
+h1{font-size:62px;line-height:1.06;letter-spacing:-.03em;margin:0 0 20px}h1 em{font-style:normal;color:#b69cff}p{font-size:25px;color:#c3bfd2;margin:0;max-width:980px;line-height:1.4}
+small{font:17px ui-monospace,Menlo,monospace;color:#6a667a;margin-top:28px}</style>
+<div class="c" id="c"></div>
+<script>
+const C={intro:`<h1>Am I underpaid?<br><em>Nobody reveals their salary.</em></h1><p>Payband: salaries are encrypted to an attested enclave on NEAR AI Cloud. Only pay bands come out, verified on NEAR.</p><small>real transactions on NEAR testnet · real NEAR AI Cloud inference · made-up company</small>`,
+outro:`<h1>Know your worth,<br><em>without showing it.</em></h1><p>Encrypted in your browser. Computed in an attested enclave. Signature checked by a NEAR contract.</p><small>github.com/Aditya-galaxy/payband · aditya-galaxy.github.io/payband · built at NEAR HACKATHON</small>`};
+document.getElementById('c').innerHTML=C[new URLSearchParams(location.search).get('card')];
+</script>

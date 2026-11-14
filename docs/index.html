@@ -173,6 +173,7 @@ const EXPLORER = 'https://testnet.nearblocks.io';
 const NEARAI = 'https://cloud-api.near.ai';
 const DEFAULT_ROUND = 'acme-2026';
 let roundId = params.get('round') || DEFAULT_ROUND;
+let stepsHtml = '';
 let rpcIdx = 0, round = null, outcome = null, subs = [], verified = null, lastSig = '', mySalary = null;
 if (params.get('embed')) document.body.classList.add('embed');
 
@@ -294,13 +295,13 @@ function bandHtml(b, lo, hi) {
 
 function render(force) {
   const r = round; if (!r) return;
-  const sig = JSON.stringify([r.status, r.counts, r.submitted, !!outcome, me, verified?.steps?.length, mySalary]);
+  const sig = JSON.stringify([r.status, r.counts, r.submitted, !!outcome, me, verified?.steps?.length, mySalary, stepsHtml]);
   if (!force && sig === lastSig) { tickClock(); return; } lastSig = sig;
   const now = Date.now() / 1000;
   const isMember = me && r.members.includes(me), done = me && r.submitted.includes(me);
   let body = `<div class="card"><div class="roundtop"><div><h1>${esc(r.title)}</h1><div class="sub">round ${esc(roundId)} · ${r.members.length} people invited · groups of ${r.k_min}+ only</div></div>
     <span class="status st-${r.status}">${r.status === 'open' ? `open · closes in <span id="clock"></span>` : esc(r.status)}</span></div>
-    <div class="roles">${r.counts.map(([role, n]) => `<div class="rolerow"><span>${esc(role)}</span><span class="dots">${Array.from({ length: Math.max(n, r.k_min) }, (_, i) => `<i class="${i < n ? 'on' : ''} ${i === r.k_min - 1 ? 'k' : ''}"></i>`).join('')}</span><span class="tag ${n >= r.k_min ? 'ok' : 'no'}">${n >= r.k_min ? `${n} · will be shown` : `${n} · hidden (<${r.k_min})`}</span></div>`).join('')}</div>
+    <div class="roles">${r.counts.map(([role, n]) => `<div class="rolerow"><span>${esc(role)}</span><span class="dots">${Array.from({ length: Math.max(n, r.k_min) }, (_, i) => `<i class="${i < n ? 'on' : ''} ${i === r.k_min - 1 ? 'k' : ''}"></i>`).join('')}</span><span class="tag ${n >= r.k_min ? 'ok' : 'no'}">${n >= r.k_min ? `${n} · will be shown` : r.status === 'open' ? `${n} · needs ${r.k_min}` : `${n} · hidden (<${r.k_min})`}</span></div>`).join('')}</div>
     <div class="grid">
       <div><div class="k">Enclave model</div><div class="v">${esc(r.model)} on NEAR AI Cloud</div></div>
       <div><div class="k">Attested model key</div><div class="v">${esc(r.model_key.slice(0, 20))}… <a href="https://cloud.near.ai/verify" target="_blank" rel="noopener">verify ↗</a></div></div>
@@ -314,7 +315,7 @@ function render(force) {
       <form class="form" id="subform"><label>Role<select id="srole">${r.roles.map(x => `<option>${esc(x)}</option>`).join('')}</select></label>
       <label>Annual salary (${esc(r.currency)})<input id="ssal" inputmode="numeric" placeholder="e.g. 128000" required></label>
       <label>&nbsp;<button class="acc" id="sbtn">Encrypt &amp; submit</button></label></form>
-      <ul class="steps" id="ssteps"></ul></div>`;
+      <ul class="steps" id="ssteps">${stepsHtml}</ul></div>`;
   }
   body += `</div>`;
   if (r.status === 'closed') body += `<div class="card"><h2>Waiting for the enclave</h2><p class="note">The round is closed. The next step sends all ${r.submitted.length} ciphertexts to the model in one sealed request; the contract only accepts the result if the model's signature checks out.</p></div>`;
@@ -370,9 +371,9 @@ document.addEventListener('submit', async e => {
   } else if (e.target.id === 'subform') {
     e.preventDefault();
     const salary = Number(String($('ssal').value).replace(/[^\d.]/g, '')), role = $('srole').value;
-    const steps = $('ssteps'), step = (t, c = 'done') => { steps.insertAdjacentHTML('beforeend', `<li class="${c}">${esc(t)}</li>`); };
+    const step = (t, c = 'done') => { stepsHtml += `<li class="${c}">${esc(t)}</li>`; const el = $('ssteps'); if (el) el.innerHTML = stepsHtml; };
     if (!(salary > 1000 && salary < 10000000)) { step('enter an annual salary', 'bad'); return; }
-    $('sbtn').disabled = true; steps.innerHTML = '';
+    $('sbtn').disabled = true; stepsHtml = ''; $('ssteps').innerHTML = '';
     try {
       const a = await attested(round.model, round.model_key);
       if (!a.ok) throw new Error('the round key is not attested right now; not sending');
