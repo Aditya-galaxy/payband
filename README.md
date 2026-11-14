@@ -6,7 +6,8 @@ Each person's salary is encrypted in their own browser to a model running in an 
 enclave on NEAR AI Cloud. The ciphertexts are stored on NEAR. When the round closes, all of
 them go to the model in one sealed request, and only pay bands come out: 25th percentile,
 median and 75th percentile per role, and only for groups of at least four. A NEAR contract
-refuses the result unless the model's signature checks out and no submission was left out.
+refuses the result unless the model's signature checks out and the signed request was exactly the
+instruction fixed when the round opened plus each submission once, nothing added or left out.
 
 Built at NEAR HACKATHON (Nov 2026). Tracks: **Privacy & Private AI**, **Real-World Money**.
 
@@ -38,26 +39,42 @@ with everyone's raw salary, or rely on anonymous self-reporting that anyone can 
 ## How it works
 
 1. **Open a round.** `create_round` records the roles, the member accounts, `k_min` (at least 3;
-   the demo uses 4), the model id and the model's ed25519 key. The key is taken from a NEAR AI
-   attestation report fetched with a fresh nonce (`scripts/open-round.mjs`).
+   the demo uses 4), the model id, the model's ed25519 key and the **aggregation instruction**.
+   The key comes from a NEAR AI attestation report fetched with a fresh nonce. The instruction is
+   stored three ways: plain text, encrypted to the model key, and the ephemeral secret used to
+   encrypt it, so anyone can re-encrypt the text and confirm the ciphertext says exactly that
+   (`scripts/open-round.mjs`).
 2. **Submit.** In the browser, the page fetches the attestation again (fresh nonce), confirms the
    round's key is still attested, then encrypts `{"role","salary_usd"}` to it
    (X25519 + HKDF-SHA256 + XChaCha20-Poly1305, NEAR AI's E2EE v2) and calls `submit`. Members
    may replace their submission until the deadline. Roles are public so the contract can count
    groups.
-3. **Aggregate.** After the deadline, `scripts/aggregate.mjs` builds one chat request: an
-   encrypted instruction, every on-chain ciphertext verbatim, an encrypted "go". The reply is
-   encrypted to a throwaway client key. Reasoning is switched off, because a chain of thought would
-   contain individual salaries and the reply is made public. The script decrypts the reply, refuses to publish anything that
-   is not exactly `{"bands":[...]}` or that contains any number other than the bands, and fetches
-   the model's signature over `model:sha256(request):sha256(response)`.
-4. **Publish.** `publish` re-checks on chain: the request contains every stored ciphertext; it is
-   for the round's model; the ed25519 signature verifies under the round's key
-   (`env::ed25519_verify`); every band covers at least `k_min` people and its count matches the
-   on-chain count; smaller groups get no band. The throwaway key is stored with it.
-5. **Verify.** On the page, *Run the checks* recomputes both hashes, confirms every ciphertext
-   is in the request, verifies the signature, decrypts the signed reply with the published key
-   and compares it with the bands, and re-fetches the attestation. All in the browser.
+3. **Aggregate.** After the deadline, `scripts/aggregate.mjs` sends one chat request: the pinned
+   instruction ciphertext, then every on-chain ciphertext verbatim as its own user message. The
+   reply is encrypted to a throwaway client key. Reasoning is switched off, because a chain of
+   thought would contain individual salaries and the reply is made public. The script refuses to
+   publish anything that is not exactly `{"bands":[...]}` or that contains any number other than
+   the bands, then fetches the model's signature over `model:sha256(request):sha256(response)`.
+4. **Publish.** `publish` parses the request on chain and requires exactly: the round's model, no
+   streaming, no fields beyond model/messages/stream/temperature/chat_template_kwargs/max_tokens,
+   and messages = [system: the pinned instruction ciphertext] + [user: each stored ciphertext,
+   once, in on-chain order]. It then checks the ed25519 signature under the round's key
+   (`env::ed25519_verify`), that every band covers at least `k_min` people with a count matching
+   the chain, and that smaller groups get no band. The throwaway key is stored with it.
+5. **Verify.** On the page, *Run the checks* re-does all of that in the browser, re-encrypts the
+   instruction from its plain text, decrypts the signed reply with the published key, compares it
+   with the bands, and re-fetches the attestation.
+
+### What is and is not guaranteed
+
+| Guarantee | Enforced by |
+| --- | --- |
+| Nobody outside the enclave sees a salary (organiser, aggregator, gateway, chain) | Browser encryption to the attested model key |
+| The enclave received exactly the pinned instruction and each submission once, as separate messages, nothing else | Contract parses the signed request; browser re-checks |
+| The instruction says what the page shows | Published ephemeral secret; browser re-encrypts |
+| The published bands are what the enclave replied | Signature over the exact reply; reply decryptable with the published key |
+| No band for a group under `k_min` | Contract, against on-chain counts |
+| **The percentiles are arithmetically correct** | **Not guaranteed.** A language model computes them. The signature proves inputs and output, not the math. See Limits. |
 
 ## Why NEAR
 
@@ -74,11 +91,13 @@ with everyone's raw salary, or rely on anonymous self-reporting that anyone can 
 
 ### 1. Look (30 seconds)
 
-Open https://aditya-galaxy.github.io/payband/ . It opens round `acme-demo-11141825`, the one in
-the demo video: nine encrypted submissions (four Engineer L2, four Engineer L3, one Staff
+Open https://aditya-galaxy.github.io/payband/ . It opens the round recorded in the demo video
+(marked **Demo round**: nine test accounts at a made-up company, made-up salaries, but real
+testnet transactions and real NEAR AI Cloud inference): nine encrypted submissions (four Engineer L2, four Engineer L3, one Staff
 Engineer), published bands for the two groups of four, and Staff Engineer marked as never
-published. Press **Run the checks**: six lines turn green (both hashes, all 9 ciphertexts in the
-request, the enclave signature, the decrypted reply equals the bands, the key is attested now).
+published. Press **Run the checks**: seven lines turn green (both hashes; the request is exactly the pinned
+instruction plus each of the 9 submissions once, in order; the instruction re-encrypts from its
+plain text; the enclave signature; the decrypted reply equals the bands; the key is attested now).
 Type a salary into *Where do you stand?* (it stays in the browser) to see your marker on the band.
 
 Transactions from that round: [open](https://testnet.nearblocks.io/txns/43MBgWzZaB5xeVyZ17vQiD7rQxUwujzUAoeE7TtL1cb7),
@@ -91,15 +110,19 @@ Every submission is listed on the [contract's page](https://testnet.nearblocks.i
 cd contract && cargo test          # Rust 1.95+ (near-sdk 5.30)
 ```
 
-`test result: ok. 13 passed`. The tests sign real ed25519 messages and cover: a valid result is
-accepted and the small group suppressed; publishing early; dropping one submission; a signature
-by another key; a tampered reply; a band for a group under `k_min`; a wrong count; a different
-model; outsiders and late submissions.
+`test result: ok. 19 passed`. The tests sign real ed25519 messages and cover: a valid result is
+accepted and the small group suppressed; publishing early; dropping one submission; one
+submission duplicated in place of another; a ciphertext smuggled inside another message; an
+injected extra record; a swapped instruction; reordered submissions; extra request fields; a
+signature by another key; a tampered reply; a band for a group under `k_min`; a wrong count; a
+different model; outsiders and late submissions.
 
-### 3. Run a full round on testnet (about 8 minutes)
+### 3. Run your own round (about 8 minutes)
 
-Needs `near-cli-rs`, Node 20+, the demo accounts (or your own; see the scripts) and a NEAR AI
-Cloud API key in `.env` as `NEARAI_API_KEY=...`.
+Needs `near-cli-rs`, Node 20+, a NEAR AI Cloud API key in `.env` as `NEARAI_API_KEY=...`, and
+testnet accounts. The scripts default to the demo accounts; for a real round with real people,
+set `ADMIN` and `EXTRA_MEMBERS` (comma-separated account ids) for `open-round.mjs`, and have each
+person submit from the page with *Use a submit-only key* or *Connect wallet*.
 
 ```sh
 npm install
@@ -117,9 +140,12 @@ Open `https://aditya-galaxy.github.io/payband/?round=my-round` to watch it, then
   publish step's leak check refused it, as designed. With reasoning off, GLM got quartiles wrong.
   DeepSeek V4.1 Flash with reasoning off was within $1k of exact on the demo data (one quartile
   rounded down by $1k).
-- **The model does the arithmetic.** A language model can miscompute a percentile. The bands are
-  checked against the model's signed reply, not recomputed. A deterministic aggregation program in
-  an attested enclave is the obvious next step.
+- **The model does the arithmetic.** A language model can miscompute a percentile, and the
+  signature cannot catch that: it binds inputs and output, not correctness. In our runs DeepSeek
+  V4.1 Flash matched exact numpy percentiles to the $1k on one dataset and was $1k low on one
+  quartile on another. The strongest upgrade is a deterministic aggregation program running in an
+  attested enclave (e.g. OutLayer on NEAR, which can decrypt sealed inputs in a TEE and is callable
+  from a contract), with the same on-chain checks. Not built.
 - **Attestation.** The page and scripts check that the round's key appears in a fresh,
   nonce-bound attestation report. Full verification of the Intel TDX and NVIDIA quotes is left to
   NEAR AI's verifier ([cloud.near.ai/verify](https://cloud.near.ai/verify)); it is not
@@ -130,16 +156,18 @@ Open `https://aditya-galaxy.github.io/payband/?round=my-round` to watch it, then
   larger groups or coarser bands. The contract enforces `k_min ≥ 3`.
 - **Key lifetime.** Submissions are encrypted to one model key; if NEAR AI rotates it before the
   round is aggregated, those ciphertexts cannot be opened. Rounds should be short.
-- **Prompt injection.** A member could put instructions inside their encrypted record. The prompt
-  says to treat records as data, and the publish step refuses any reply that is not exactly
-  bands, but a malicious record could still skew the result.
+- **Prompt injection.** A member could put instructions inside their encrypted record. The pinned
+  instruction says to treat records as data, and the publish step refuses any reply that is not
+  exactly bands, but a malicious record could still skew the result. Whoever runs the aggregation
+  cannot inject anything: the contract fixes the request's shape.
 - Testnet only. Not audited. "Acme" and its salaries are made up.
 
 ## Layout
 
 ```
 contract/src/lib.rs     rounds, encrypted submissions, publish with on-chain signature + coverage + k checks
-contract/src/tests.rs   13 tests with real ed25519 signatures
+contract/src/tests.rs   19 tests with real ed25519 signatures
+WALKTHROUGH.md          a 2-minute live demo script
 docs/index.html         the page: sign-in, in-browser encryption, bands, in-browser verification
 scripts/e2ee.mjs        NEAR AI E2EE v2 encryption and attestation fetch (Node)
 scripts/open-round.mjs, submit-demo.mjs, aggregate.mjs, near.mjs

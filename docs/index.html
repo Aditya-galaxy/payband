@@ -68,6 +68,8 @@
   .you::after { content: 'you'; position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font: 600 11px var(--mono); color: var(--warn); }
   .ticks { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted); margin-top: 6px; }
   .ticks b { color: var(--text); font-size: 13px; }
+  .demo { background: rgba(255,182,72,.08); border: 1px solid rgba(255,182,72,.45); color: #f3dcb4; border-radius: 12px; padding: 11px 16px; margin-bottom: 12px; font-size: 13.5px; }
+  .demo b { color: var(--warn); }
   .hidden { color: var(--faint); font-size: 14px; border: 1px dashed var(--line2); border-radius: 10px; padding: 12px 14px; }
   .mine { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
   .mine p { margin: 0; color: var(--muted); font-size: 13.5px; flex-basis: 100%; }
@@ -129,13 +131,13 @@
   <div class="cols">
     <div class="card"><h2>Your employer, the organiser, us</h2><p>Only ciphertext. Your salary is encrypted before it leaves your browser, to a key that exists only inside the model's enclave. Your <b>role</b> is public so the contract can count groups; your salary is not.</p></div>
     <div class="card"><h2>The enclave</h2><p>Decrypts every record, computes the 25th percentile, median and 75th percentile per role, and returns only those. Its key is bound to an Intel TDX + NVIDIA attestation you can check yourself.</p></div>
-    <div class="card"><h2>The NEAR contract</h2><p>Refuses a result unless the enclave signed it, the request contained <b>every</b> submission, and each published group has at least four people. Smaller groups are never shown.</p></div>
+    <div class="card"><h2>The NEAR contract</h2><p>Refuses a result unless the enclave signed it, and the request was exactly the instruction fixed at the start plus <b>each submission once, as its own message</b>, nothing added. Each published group must have at least four people.</p></div>
   </div>
 
   <div class="sect"><h3>What is real, and what is next</h3><p>Stated plainly.</p></div>
   <div class="cols">
     <div class="card"><h2>Real today</h2><p>Browser encryption to NEAR AI Cloud's attested model key, ciphertexts on NEAR testnet, one end-to-end encrypted request to the model, on-chain ed25519 check of its signature, the k-anonymity rule, and in-browser verification of everything on this page.</p></div>
-    <div class="card"><h2>Trusted, for now</h2><p>The model does the arithmetic, and a language model can get it wrong. The bands are checked against the signed reply, not recomputed. Attestation is checked for a fresh nonce here; the full Intel/NVIDIA quote check is NEAR AI's verifier. Demo salaries are made up.</p></div>
+    <div class="card"><h2>Trusted, for now</h2><p>The model does the arithmetic. The signature proves which inputs went in and what came out, not that the percentiles are right; a language model can get them wrong. Attestation is checked for a fresh nonce here; the full Intel/NVIDIA quote check is NEAR AI's verifier. Demo salaries are made up.</p></div>
     <div class="card"><h2>Next</h2><p>Run the percentile code itself in an attested enclave (deterministic, no model), coarser bands for small groups, and payroll-signed salary proofs so nobody can inflate their own number.</p></div>
   </div>
 
@@ -184,10 +186,10 @@ const when = s => new Date(s * 1000).toLocaleString(undefined, { dateStyle: 'med
 const INFO = utf8ToBytes('ed25519_encryption');
 const sha = s => bytesToHex(sha256(utf8ToBytes(s)));
 
-function encryptFor(keyHex, text) {
-  const eph = x25519.utils.randomPrivateKey();
+function encryptFor(keyHex, text, ephHex, nonceHex) {
+  const eph = ephHex ? hexToBytes(ephHex) : x25519.utils.randomPrivateKey();
   const k = hkdf(sha256, x25519.getSharedSecret(eph, edwardsToMontgomeryPub(hexToBytes(keyHex))), undefined, INFO, 32);
-  const nonce = crypto.getRandomValues(new Uint8Array(24));
+  const nonce = nonceHex ? hexToBytes(nonceHex) : crypto.getRandomValues(new Uint8Array(24));
   const ct = xchacha20poly1305(k, nonce).encrypt(utf8ToBytes(text));
   const out = new Uint8Array(56 + ct.length); out.set(x25519.getPublicKey(eph)); out.set(nonce, 32); out.set(ct, 56);
   return bytesToHex(out);
@@ -267,8 +269,17 @@ async function verify() {
   const add = (ok, text) => steps.push([ok, text]);
   add(sha(o.request_body) === o.request_hash, `request hashes to ${o.request_hash.slice(0, 16)}…`);
   add(sha(o.response_body) === o.response_hash, `response hashes to ${o.response_hash.slice(0, 16)}…`);
-  const missing = subs.filter(s => !o.request_body.includes(s.ciphertext)).length;
-  add(missing === 0, `request contains all ${subs.length} on-chain ciphertexts`);
+  let shapeOk = false;
+  try {
+    const req = JSON.parse(o.request_body), m = req.messages;
+    shapeOk = req.model === round.model && req.stream === false && m.length === subs.length + 1
+      && m[0].role === 'system' && m[0].content === round.instruction_ct
+      && subs.every((s, i) => m[i + 1].role === 'user' && m[i + 1].content === s.ciphertext && Object.keys(m[i + 1]).length === 2);
+  } catch (e) {}
+  add(shapeOk, `request is exactly the pinned instruction + each of the ${subs.length} submissions once, in order`);
+  let instrOk = false;
+  try { instrOk = encryptFor(round.model_key, round.instruction, round.instruction_eph, round.instruction_ct.slice(64, 112)) === round.instruction_ct; } catch (e) {}
+  add(instrOk, 'the pinned instruction ciphertext re-encrypts from the published plain text');
   const text = `${round.model}:${o.request_hash}:${o.response_hash}`;
   let sigOk = false; try { sigOk = ed25519.verify(hexToBytes(o.signature), utf8ToBytes(text), hexToBytes(round.model_key)); } catch (e) {}
   add(sigOk, `model signature verifies under the round key ${round.model_key.slice(0, 12)}…`);
@@ -299,7 +310,8 @@ function render(force) {
   if (!force && sig === lastSig) { tickClock(); return; } lastSig = sig;
   const now = Date.now() / 1000;
   const isMember = me && r.members.includes(me), done = me && r.submitted.includes(me);
-  let body = `<div class="card"><div class="roundtop"><div><h1>${esc(r.title)}</h1><div class="sub">round ${esc(roundId)} · ${r.members.length} people invited · groups of ${r.k_min}+ only</div></div>
+  const demo = r.admin === 'acme-cam.testnet';
+  let body = (demo ? `<div class="demo"><b>Demo round.</b> Nine test accounts at a made-up company, with made-up salaries, run end to end on NEAR testnet and NEAR AI Cloud. A real round works the same way with real people: see “Run your own round” in the README.</div>` : '') + `<div class="card"><div class="roundtop"><div><h1>${esc(r.title)}</h1><div class="sub">round ${esc(roundId)} · ${r.members.length} people invited · groups of ${r.k_min}+ only</div></div>
     <span class="status st-${r.status}">${r.status === 'open' ? `open · closes in <span id="clock"></span>` : esc(r.status)}</span></div>
     <div class="roles">${r.counts.map(([role, n]) => `<div class="rolerow"><span>${esc(role)}</span><span class="dots">${Array.from({ length: Math.max(n, r.k_min) }, (_, i) => `<i class="${i < n ? 'on' : ''} ${i === r.k_min - 1 ? 'k' : ''}"></i>`).join('')}</span><span class="tag ${n >= r.k_min ? 'ok' : 'no'}">${n >= r.k_min ? `${n} · will be shown` : r.status === 'open' ? `${n} · needs ${r.k_min}` : `${n} · hidden (<${r.k_min})`}</span></div>`).join('')}</div>
     <div class="grid">
@@ -307,7 +319,8 @@ function render(force) {
       <div><div class="k">Attested model key</div><div class="v">${esc(r.model_key.slice(0, 20))}… <a href="https://cloud.near.ai/verify" target="_blank" rel="noopener">verify ↗</a></div></div>
       <div><div class="k">Submissions</div><div class="v">${r.submitted.length} of ${r.members.length} · <a href="${EXPLORER}/address/${CONTRACT}" target="_blank" rel="noopener">on chain ↗</a></div></div>
       <div><div class="k">Closes</div><div class="v">${when(r.closes_at)}</div></div>
-    </div>`;
+    </div>
+    <details style="margin-top:14px"><summary class="sub">instruction the enclave receives (fixed when the round opened)</summary><pre style="margin-top:8px">${esc(r.instruction)}</pre></details>`;
   if (r.status === 'open') {
     if (!me) body += `<p class="note" style="margin-top:18px">Members of this round sign in to submit. Anyone can watch.</p>`;
     else if (!isMember) body += `<p class="note" style="margin-top:18px">${esc(me)} is not on this round's member list.</p>`;

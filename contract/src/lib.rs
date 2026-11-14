@@ -7,8 +7,10 @@
 //!    ciphertext here. Nobody else, the organiser included, can open it.
 //! 3. After the deadline, anyone with an API key sends every ciphertext to the model in one
 //!    request. The model returns only bands. `publish` accepts the result only if:
+//!    - the request body, parsed, is exactly: the round's model, no streaming, and the messages
+//!      [the instruction pinned when the round opened] + [each stored ciphertext, once, as its
+//!      own user message, in on-chain order], and nothing else,
 //!    - the exact request body hashes to the hash the model signed,
-//!    - the request body contains every stored ciphertext (nothing dropped or swapped in),
 //!    - the signature `"<model>:<request_hash>:<response_hash>"` verifies under the round's
 //!      model key (ed25519, checked on chain),
 //!    - every published band covers at least `k_min` people, matching the on-chain counts.
@@ -23,6 +25,8 @@ use near_sdk::{env, near, require, AccountId, BorshStorageKey, PanicOnDefault};
 #[near]
 enum Key {
     Rounds,
+    /// v2 (exact request structure, pinned instruction) keeps its rounds under a new prefix.
+    RoundsV2,
 }
 
 #[near(serializers = [json, borsh])]
@@ -76,6 +80,13 @@ pub struct Round {
     /// The model's attested ed25519 key, hex. Members encrypt to it; its signature is checked.
     pub model_key: String,
     pub closes_at: u64,
+    /// The aggregation instruction in plain text, fixed when the round opens.
+    pub instruction: String,
+    /// The same instruction encrypted to the model key. Publish requires exactly this ciphertext.
+    pub instruction_ct: String,
+    /// The ephemeral X25519 secret used for `instruction_ct`, so anyone can re-encrypt
+    /// `instruction` and confirm the ciphertext says what the plain text says.
+    pub instruction_eph: String,
     pub submissions: Vec<Submission>,
     pub outcome: Option<Outcome>,
 }
@@ -92,6 +103,9 @@ pub struct RoundView {
     pub model: String,
     pub model_key: String,
     pub closes_at: u64,
+    pub instruction: String,
+    pub instruction_ct: String,
+    pub instruction_eph: String,
     pub counts: Vec<(String, u32)>,
     pub submitted: Vec<AccountId>,
     pub status: String,
@@ -123,6 +137,28 @@ fn emit(event: &str, data: near_sdk::serde_json::Value) {
     ));
 }
 
+/// Fields a request may carry. Anything else (tools, response formats, extra settings) is refused.
+const ALLOWED_FIELDS: [&str; 6] = ["model", "messages", "stream", "temperature", "chat_template_kwargs", "max_tokens"];
+
+fn check_request(round: &Round, body: &str) {
+    use near_sdk::serde_json::Value;
+    let v: Value = near_sdk::serde_json::from_str(body).unwrap_or_else(|_| env::panic_str("request is not JSON"));
+    let obj = v.as_object().unwrap_or_else(|| env::panic_str("request is not a JSON object"));
+    require!(obj.keys().all(|k| ALLOWED_FIELDS.contains(&k.as_str())), "request has a field that is not allowed");
+    require!(obj.get("model").and_then(Value::as_str) == Some(round.model.as_str()), "request is for a different model");
+    require!(obj.get("stream").and_then(Value::as_bool) == Some(false), "request must not stream");
+    let msgs = obj.get("messages").and_then(Value::as_array).unwrap_or_else(|| env::panic_str("request has no messages"));
+    let is_msg = |m: &Value, role: &str, content: &str| {
+        m.as_object().map_or(false, |o| o.len() == 2 && o.get("role").and_then(Value::as_str) == Some(role)
+            && o.get("content").and_then(Value::as_str) == Some(content))
+    };
+    require!(msgs.len() == 1 + round.submissions.len(), "request must hold the instruction plus exactly one message per submission");
+    require!(is_msg(&msgs[0], "system", &round.instruction_ct), "first message must be the round's pinned instruction");
+    for (m, s) in msgs[1..].iter().zip(round.submissions.iter()) {
+        require!(is_msg(m, "user", &s.ciphertext), "each submission must appear once, as its own user message, in on-chain order");
+    }
+}
+
 impl Round {
     fn counts(&self) -> Vec<(String, u32)> {
         self.roles
@@ -136,7 +172,14 @@ impl Round {
 impl Contract {
     #[init]
     pub fn new() -> Self {
-        Self { rounds: LookupMap::new(Key::Rounds) }
+        Self { rounds: LookupMap::new(Key::RoundsV2) }
+    }
+
+    /// One-off upgrade from v1 on testnet: start over with an empty round table.
+    #[private]
+    #[init(ignore_state)]
+    pub fn migrate_v2() -> Self {
+        Self { rounds: LookupMap::new(Key::RoundsV2) }
     }
 
     /// Open a round. The caller becomes its admin.
@@ -152,7 +195,14 @@ impl Contract {
         model: String,
         model_key: String,
         closes_at: u64,
+        instruction: String,
+        instruction_ct: String,
+        instruction_eph: String,
     ) {
+        require!(!instruction.is_empty() && instruction.len() <= 4_000, "instruction: 1-4000 chars");
+        require!(instruction_ct.len() >= 2 * (32 + 24 + 16 + 1) && instruction_ct.len() <= 10_000
+            && instruction_ct.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()), "instruction_ct: lowercase hex");
+        hex32(&instruction_eph, "instruction_eph");
         require!(!round_id.is_empty() && round_id.len() <= 64, "round_id: 1-64 chars");
         require!(!self.rounds.contains_key(&round_id), "round already exists");
         require!(!title.is_empty() && title.len() <= 120, "title: 1-120 chars");
@@ -179,6 +229,9 @@ impl Contract {
                 model,
                 model_key: model_key.to_lowercase(),
                 closes_at,
+                instruction,
+                instruction_ct,
+                instruction_eph,
                 submissions: vec![],
                 outcome: None,
             },
@@ -221,14 +274,8 @@ impl Contract {
         require!(now > round.closes_at, "round is still open");
         require!(round.outcome.is_none(), "already published");
 
-        // 1. The request carries every stored ciphertext, the round's model and no streaming.
-        for s in round.submissions.iter() {
-            require!(request_body.contains(&s.ciphertext), "request is missing a submission");
-        }
-        require!(
-            request_body.contains(&format!("\"model\":\"{}\"", round.model)),
-            "request is for a different model"
-        );
+        // 1. The request is exactly: pinned instruction + each submission once, in order.
+        check_request(round, &request_body);
 
         // 2. The model's signature over model:request_hash:response_hash.
         let request_hash = hex::encode(env::sha256(request_body.as_bytes()));
@@ -289,6 +336,9 @@ impl Contract {
             model: r.model.clone(),
             model_key: r.model_key.clone(),
             closes_at: r.closes_at,
+            instruction: r.instruction.clone(),
+            instruction_ct: r.instruction_ct.clone(),
+            instruction_eph: r.instruction_eph.clone(),
             counts: r.counts(),
             submitted: r.submissions.iter().map(|s| s.member.clone()).collect(),
             status: if r.outcome.is_some() { "published" } else if now > r.closes_at { "closed" } else { "open" }.to_string(),

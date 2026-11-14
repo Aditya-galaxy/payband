@@ -10,12 +10,17 @@ import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 export const API = 'https://cloud-api.near.ai';
 const INFO = utf8ToBytes('ed25519_encryption');
 
-/** Encrypt to a model's ed25519 key: [ephemeral x25519 pub 32][nonce 24][ciphertext+tag], hex. */
-export function encryptFor(modelKeyHex, plaintext) {
+/**
+ * Encrypt to a model's ed25519 key: [ephemeral x25519 pub 32][nonce 24][ciphertext+tag], hex.
+ * Pass `ephHex` (and the nonce is then taken from `nonceHex`) to make it reproducible: anyone holding
+ * the ephemeral secret can re-encrypt the same text and get the same bytes. Used only for the public
+ * round instruction, never for salaries.
+ */
+export function encryptFor(modelKeyHex, plaintext, ephHex, nonceHex) {
   const recipient = edwardsToMontgomeryPub(hexToBytes(modelKeyHex));
-  const eph = x25519.utils.randomPrivateKey();
+  const eph = ephHex ? hexToBytes(ephHex) : x25519.utils.randomPrivateKey();
   const key = hkdf(sha256, x25519.getSharedSecret(eph, recipient), undefined, INFO, 32);
-  const nonce = randomBytes(24);
+  const nonce = nonceHex ? hexToBytes(nonceHex) : randomBytes(24);
   const ct = xchacha20poly1305(key, nonce).encrypt(utf8ToBytes(plaintext));
   const out = new Uint8Array(32 + 24 + ct.length);
   out.set(x25519.getPublicKey(eph), 0); out.set(nonce, 32); out.set(ct, 56);
@@ -35,6 +40,7 @@ export function newClientKey() {
   return { secret: bytesToHex(secret), pub: bytesToHex(ed25519.getPublicKey(secret)) };
 }
 
+export const randomHex = n => bytesToHex(randomBytes(n));
 export const sha256hex = s => bytesToHex(sha256(typeof s === 'string' ? utf8ToBytes(s) : s));
 export const verifySig = (sigHex, text, keyHex) => ed25519.verify(hexToBytes(sigHex), utf8ToBytes(text), hexToBytes(keyHex));
 

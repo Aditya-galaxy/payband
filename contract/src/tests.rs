@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 const T0: u64 = 1_800_000_000;
 const CLOSE: u64 = T0 + 1_000;
 const MODEL: &str = "z-ai/glm-5.3-flash";
+fn instr_ct() -> String { hex::encode(vec![0xabu8; 32 + 24 + 40]) }
 
 fn acc(s: &str) -> AccountId { s.parse().unwrap() }
 fn at(who: &str, t: u64) {
@@ -20,7 +21,8 @@ fn setup() -> Contract {
     at("org.testnet", T0);
     let mut c = Contract::new();
     c.create_round("r1".into(), "Acme 2026".into(), "USD".into(), vec!["L2".into(), "L3".into(), "Staff".into()],
-        members(), 4, MODEL.into(), hex::encode(key().verifying_key().to_bytes()), CLOSE);
+        members(), 4, MODEL.into(), hex::encode(key().verifying_key().to_bytes()), CLOSE,
+        "Compute bands.".into(), instr_ct(), hex::encode([5u8; 32]));
     // 4 x L2, 4 x L3, 1 x Staff
     for i in 1..=9u8 {
         let role = if i <= 4 { "L2" } else if i <= 8 { "L3" } else { "Staff" };
@@ -32,8 +34,9 @@ fn setup() -> Contract {
 
 fn request_body(c: &Contract) -> String {
     let subs = c.get_submissions("r1".into());
-    let msgs: Vec<String> = subs.iter().map(|s| format!("{{\"role\":\"user\",\"content\":\"{}\"}}", s.ciphertext)).collect();
-    format!("{{\"model\":\"{MODEL}\",\"messages\":[{}],\"stream\":false}}", msgs.join(","))
+    let mut msgs = vec![format!("{{\"role\":\"system\",\"content\":\"{}\"}}", instr_ct())];
+    msgs.extend(subs.iter().map(|s| format!("{{\"role\":\"user\",\"content\":\"{}\"}}", s.ciphertext)));
+    format!("{{\"model\":\"{MODEL}\",\"messages\":[{}],\"stream\":false,\"temperature\":0}}", msgs.join(","))
 }
 fn sign(req: &str, resp: &str) -> String {
     let h = |s: &str| hex::encode(Sha256::digest(s.as_bytes()));
@@ -104,7 +107,7 @@ fn cannot_publish_early() {
 }
 
 #[test]
-#[should_panic(expected = "request is missing a submission")]
+#[should_panic(expected = "exactly one message per submission")]
 fn dropping_a_submission_is_refused() {
     let mut c = setup();
     let full = request_body(&c);
@@ -171,5 +174,63 @@ fn other_model_is_refused() {
 fn k_min_floor() {
     at("org.testnet", T0);
     let mut c = Contract::new();
-    c.create_round("r".into(), "t".into(), "USD".into(), vec!["a".into()], members(), 2, MODEL.into(), hex::encode([1u8; 32]), CLOSE);
+    c.create_round("r".into(), "t".into(), "USD".into(), vec!["a".into()], members(), 2, MODEL.into(), hex::encode([1u8; 32]), CLOSE,
+        "x".into(), instr_ct(), hex::encode([5u8; 32]));
+}
+
+fn publish_with(c: &mut Contract, req: String) {
+    at("anyone.testnet", CLOSE + 1);
+    c.publish("r1".into(), bands(), req.clone(), "{}".into(), sign(&req, "{}"), secret());
+}
+
+#[test]
+#[should_panic(expected = "each submission must appear once")]
+fn duplicating_a_submission_in_place_of_another_is_refused() {
+    let mut c = setup();
+    let subs = c.get_submissions("r1".into());
+    let req = request_body(&c).replace(&subs[2].ciphertext, &subs[1].ciphertext);
+    publish_with(&mut c, req);
+}
+
+#[test]
+#[should_panic(expected = "each submission must appear once")]
+fn ciphertext_hidden_inside_another_message_is_refused() {
+    let mut c = setup();
+    let subs = c.get_submissions("r1".into());
+    // Old check would pass: every ciphertext string still appears somewhere in the body.
+    let req = request_body(&c).replace(&format!("\"content\":\"{}\"", subs[3].ciphertext), &format!("\"content\":\"{}{}\"", subs[3].ciphertext, subs[3].ciphertext));
+    publish_with(&mut c, req);
+}
+
+#[test]
+#[should_panic(expected = "exactly one message per submission")]
+fn extra_injected_record_is_refused() {
+    let mut c = setup();
+    let req = request_body(&c).replace("],\"stream\"", &format!(",{{\"role\":\"user\",\"content\":\"{}\"}}],\"stream\"", ct(99)));
+    publish_with(&mut c, req);
+}
+
+#[test]
+#[should_panic(expected = "pinned instruction")]
+fn swapped_instruction_is_refused() {
+    let mut c = setup();
+    let req = request_body(&c).replace(&instr_ct(), &hex::encode(vec![0xcdu8; 32 + 24 + 40]));
+    publish_with(&mut c, req);
+}
+
+#[test]
+#[should_panic(expected = "in on-chain order")]
+fn reordered_submissions_are_refused() {
+    let mut c = setup();
+    let subs = c.get_submissions("r1".into());
+    let req = request_body(&c).replace(&subs[0].ciphertext, "TMP").replace(&subs[1].ciphertext, &subs[0].ciphertext).replace("TMP", &subs[1].ciphertext);
+    publish_with(&mut c, req);
+}
+
+#[test]
+#[should_panic(expected = "field that is not allowed")]
+fn extra_request_fields_are_refused() {
+    let mut c = setup();
+    let req = request_body(&c).replace("\"stream\":false", "\"stream\":false,\"tools\":[]");
+    publish_with(&mut c, req);
 }
