@@ -71,11 +71,16 @@ with everyone's raw salary, or rely on anonymous self-reporting that anyone can 
 
 ### 1. Look (30 seconds)
 
-Open https://aditya-galaxy.github.io/payband/ . Round `acme-2026` shows nine encrypted
-submissions: four Engineer L2, four Engineer L3 and one Staff Engineer. The Staff Engineer group
-shows *hidden (<4)*. After publication you see two bands, and the Staff Engineer group is marked
-as never published. Press **Run the checks** to see each verification step turn green. Type a
-salary into *Where do you stand?* (it stays in the browser) to see your position on the band.
+Open https://aditya-galaxy.github.io/payband/ . It opens round `acme-demo-11141825`, the one in
+the demo video: nine encrypted submissions (four Engineer L2, four Engineer L3, one Staff
+Engineer), published bands for the two groups of four, and Staff Engineer marked as never
+published. Press **Run the checks**: six lines turn green (both hashes, all 9 ciphertexts in the
+request, the enclave signature, the decrypted reply equals the bands, the key is attested now).
+Type a salary into *Where do you stand?* (it stays in the browser) to see your marker on the band.
+
+Transactions from that round: [open](https://testnet.nearblocks.io/txns/43MBgWzZaB5xeVyZ17vQiD7rQxUwujzUAoeE7TtL1cb7),
+[publish, with the on-chain signature check](https://testnet.nearblocks.io/txns/9Gk9TqLXD6DGg6JjX1asFTCqz9dAYYjHwz4wwit1SQQn).
+Every submission is listed on the [contract's page](https://testnet.nearblocks.io/address/payband.testnet).
 
 ### 2. Run the tests (1 minute)
 
@@ -135,7 +140,7 @@ contract/src/tests.rs   13 tests with real ed25519 signatures
 docs/index.html         the page: sign-in, in-browser encryption, bands, in-browser verification
 scripts/e2ee.mjs        NEAR AI E2EE v2 encryption and attestation fetch (Node)
 scripts/open-round.mjs, submit-demo.mjs, aggregate.mjs, near.mjs
-video/                  how the demo video was made (narration via Google Cloud TTS)
+video/                  record.mjs (real browser + testnet + NEAR AI), voice.sh (Google Cloud TTS, Chirp 3 HD)
 ```
 
 ## Disclosures

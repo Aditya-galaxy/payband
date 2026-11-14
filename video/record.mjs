@@ -16,9 +16,14 @@ const ROUND = 'acme-demo-' + new Date().toISOString().replace(/\D/g, '').slice(4
 const WINDOW_MIN = Number(process.env.WINDOW_MIN || 2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const log = m => console.log(`[${new Date().toISOString().slice(11, 19)}] ${m}`);
-const node = (args, extra = {}) => { const p = spawnSync('node', args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...extra } }); if (p.status) throw new Error(p.stdout + p.stderr); return p.stdout; };
+// Async on purpose: a blocking child process would freeze the screenshot loop.
+const node = (args, extra = {}) => new Promise((res, rej) => {
+  const p = spawn('node', args, { cwd: ROOT, env: { ...process.env, ...extra } }); let out = '';
+  p.stdout.on('data', d => out += d); p.stderr.on('data', d => out += d);
+  p.on('close', c => c ? rej(new Error(out)) : res(out));
+});
 
-log(`opening ${ROUND}`); log(node(['scripts/open-round.mjs', ROUND, String(WINDOW_MIN)]).split('\n')[1]);
+log(`opening ${ROUND}`); log((await node(['scripts/open-round.mjs', ROUND, String(WINDOW_MIN)])).split('\n')[1]);
 const server = spawn('python3', ['-m', 'http.server', String(PORT), '--directory', ROOT], { stdio: 'ignore' });
 await sleep(1000);
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -68,7 +73,7 @@ await sleep(1500); await spokenOut();
 await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
 await cap('Eight colleagues submit the same way.', 'only ciphertext reaches NEAR · fast-forward 3x');
 await say('others'); speed = 3;
-node(['scripts/submit-demo.mjs', ROUND], { SKIP: 'ana' });
+await node(['scripts/submit-demo.mjs', ROUND], { SKIP: 'ana' });
 speed = 1; await sleep(1500); await spokenOut();
 await cap('Staff Engineer has one person, under the minimum of four: no band, ever.');
 await sleep(2500);
@@ -77,7 +82,7 @@ await page.waitForFunction(() => /closed/i.test(document.querySelector('.status'
 speed = 1;
 await cap('Closed. All ciphertexts go to the model in its attested enclave, in one sealed request.', 'NEAR AI Cloud · end-to-end encrypted · the reply is signed by the enclave key');
 await say('close');
-speed = 2; log(node(['scripts/aggregate.mjs', ROUND]).trim().split('\n').slice(-3).join(' | '));
+speed = 2; log((await node(['scripts/aggregate.mjs', ROUND])).trim().split('\n').slice(-3).join(' | '));
 await page.waitForSelector('.band', { timeout: 60000 }); speed = 1;
 await spokenOut();
 await cap('Only the bands come out, accepted on chain because the enclave’s signature verified.');
