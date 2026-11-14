@@ -335,7 +335,9 @@ function render(force) {
         : `<button class="acc" id="vbtn" style="margin-top:12px">Run the checks</button>`}
         <div class="sub" style="margin-top:12px">published by ${esc(outcome.publisher)} · ${when(outcome.published_at)}</div></div>`;
   }
+  const keep = ['srole', 'ssal', 'mrole', 'msal'].map(id => [id, $(id)?.value]);
   $('out').innerHTML = body; tickClock();
+  for (const [id, v] of keep) if (v && $(id)) $(id).value = v;
 }
 function verdict() {
   const b = outcome.bands.find(x => x.role === mySalary.role); if (!b) return '';
