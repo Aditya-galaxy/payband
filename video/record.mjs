@@ -60,7 +60,7 @@ const cap = (t, sub = '') => page.evaluate(([t, sub]) => { document.getElementBy
 const scrollTo = sel => page.evaluate(s => document.querySelector(s)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), sel);
 
 recording = true; last = Date.now();
-const loop = (async () => { while (recording) { const f = `f${String(n++).padStart(5, '0')}.jpg`; await page.screenshot({ path: join(OUT, 'frames', f), type: 'jpeg', quality: 88 }); const now = Date.now(); segments.push([f, (now - last) / 1000 / speed]); last = now; await sleep(50); } })();
+const loop = (async () => { while (recording) { const f = `f${String(n++).padStart(5, '0')}.jpg`; await page.screenshot({ path: join(OUT, 'frames', f), type: 'jpeg', quality: 80 }); const now = Date.now(); segments.push([f, (now - last) / 1000 / speed]); last = now; await sleep(50); } })();
 
 await cap('Ana, an engineer at Acme, adds her salary.', 'signed in with a key that can only call submit');
 await scrollTo('#subform'); await sleep(800);

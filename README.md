@@ -91,7 +91,7 @@ with everyone's raw salary, or rely on anonymous self-reporting that anyone can 
 
 ### 1. Look (30 seconds)
 
-Open https://aditya-galaxy.github.io/payband/ . It opens the round recorded in the demo video
+Open https://aditya-galaxy.github.io/payband/ . It opens round `acme-demo-11141842`, the one recorded in the demo video
 (marked **Demo round**: nine test accounts at a made-up company, made-up salaries, but real
 testnet transactions and real NEAR AI Cloud inference): nine encrypted submissions (four Engineer L2, four Engineer L3, one Staff
 Engineer), published bands for the two groups of four, and Staff Engineer marked as never
@@ -100,8 +100,8 @@ instruction plus each of the 9 submissions once, in order; the instruction re-en
 plain text; the enclave signature; the decrypted reply equals the bands; the key is attested now).
 Type a salary into *Where do you stand?* (it stays in the browser) to see your marker on the band.
 
-Transactions from that round: [open](https://testnet.nearblocks.io/txns/43MBgWzZaB5xeVyZ17vQiD7rQxUwujzUAoeE7TtL1cb7),
-[publish, with the on-chain signature check](https://testnet.nearblocks.io/txns/9Gk9TqLXD6DGg6JjX1asFTCqz9dAYYjHwz4wwit1SQQn).
+Its publish transaction, where the contract parsed the request and checked the enclave signature:
+[HXAr4rvf…](https://testnet.nearblocks.io/txns/HXAr4rvf3QpHrkMxXWot9arLNyDnPhWRAiR6cgEGuaHu).
 Every submission is listed on the [contract's page](https://testnet.nearblocks.io/address/payband.testnet).
 
 ### 2. Run the tests (1 minute)
@@ -141,9 +141,16 @@ Open `https://aditya-galaxy.github.io/payband/?round=my-round` to watch it, then
   DeepSeek V4.1 Flash with reasoning off was within $1k of exact on the demo data (one quartile
   rounded down by $1k).
 - **The model does the arithmetic.** A language model can miscompute a percentile, and the
-  signature cannot catch that: it binds inputs and output, not correctness. In our runs DeepSeek
-  V4.1 Flash matched exact numpy percentiles to the $1k on one dataset and was $1k low on one
-  quartile on another. The strongest upgrade is a deterministic aggregation program running in an
+  signature cannot catch that: it binds inputs and output, not correctness. The demo salaries are
+  in `scripts/submit-demo.mjs` (Ana's 112,000 is typed on screen), so you can check the showcase
+  round yourself:
+
+  | Role | Exact (numpy) p25 / median / p75 | Enclave returned |
+  | --- | --- | --- |
+  | Engineer L2 | 111k / 118k / 126k | 111k / 118k / 126k |
+  | Engineer L3 | 151k / 156k / 161k | **149k** / 156k / 161k |
+
+  Five of six figures are exact; one quartile is $2k low. The strongest upgrade is a deterministic aggregation program running in an
   attested enclave (e.g. OutLayer on NEAR, which can decrypt sealed inputs in a TEE and is callable
   from a contract), with the same on-chain checks. Not built.
 - **Attestation.** The page and scripts check that the round's key appears in a fresh,
