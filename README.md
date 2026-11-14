@@ -159,8 +159,14 @@ Open `https://aditya-galaxy.github.io/payband/?round=my-round` to watch it, then
   round), and computes numpy-style percentiles. Its unit tests pass, including the quartile above
   (151k, where the model said 149k). On 14 Nov, three `request_execution` calls to
   `outlayer.testnet`, with this wasm and with a trivial echo wasm, all timed out without a worker
-  response, so it is not wired into the contract. Next: publish the wasm through FastFS as
-  OutLayer's tooling expects, then have the contract call it at round open (key) and close (bands).
+  response, so it is not wired into the contract. It was not our code: a trivial echo wasm
+  (WASI preview 1 and 2, hosted on GitHub and on FastFS) timed out the same way, and so did other
+  teams' testnet requests sent minutes apart (e.g. tx `2eVrpYEDqjLAtYoYe3QCwWXarnHy1xEwLyqb4R2FBVxp`,
+  `7xCsPaXa3m7e1gZ9JDjWD1S6XHfVz9sJNVSQa9VTLQx`), all ending in `Execution promise failed`.
+  The wasm is already on FastFS at
+  `test.fastfs.io/acme-cam.testnet/outlayer.testnet/84859e6e…d64d6b.wasm`. Next: once OutLayer's testnet
+  workers serve runs again (or on mainnet), have the contract call it at round open (key) and
+  close (bands).
 - **Attestation.** The page and scripts check that the round's key appears in a fresh,
   nonce-bound attestation report. Full verification of the Intel TDX and NVIDIA quotes is left to
   NEAR AI's verifier ([cloud.near.ai/verify](https://cloud.near.ai/verify)); it is not
