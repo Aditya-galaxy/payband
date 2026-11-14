@@ -8,7 +8,7 @@ them go to the model in one sealed request, and only pay bands come out: 25th pe
 median and 75th percentile per role, and only for groups of at least four. A NEAR contract
 refuses the result unless the model's signature checks out and no submission was left out.
 
-Built at NEAR HACKATHON (Nov 2026). Track: **Privacy & Private AI**.
+Built at NEAR HACKATHON (Nov 2026). Tracks: **Privacy & Private AI**, **Real-World Money**.
 
 - Live page: https://aditya-galaxy.github.io/payband/
 - Contract (testnet): [`payband.testnet`](https://testnet.nearblocks.io/address/payband.testnet)
@@ -20,7 +20,10 @@ Built at NEAR HACKATHON (Nov 2026). Track: **Privacy & Private AI**.
 ## The problem
 
 Pay transparency helps the people who are underpaid most, and they are the ones least
-willing to share their number. Salary surveys either trust a company (HR, a survey vendor)
+willing to share their number. It is also becoming a legal duty: the EU Pay Transparency Directive
+(Directive (EU) 2023/970, to be in national law by 7 June 2026) gives workers the right to ask
+for average pay levels for people doing the same work. Payband is one way to answer that kind of
+question without anyone, the employer included, handling individual salaries. Salary surveys either trust a company (HR, a survey vendor)
 with everyone's raw salary, or rely on anonymous self-reporting that anyone can game.
 
 ## Who sees what
