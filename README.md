@@ -150,9 +150,17 @@ Open `https://aditya-galaxy.github.io/payband/?round=my-round` to watch it, then
   | Engineer L2 | 111k / 118k / 126k | 111k / 118k / 126k |
   | Engineer L3 | 151k / 156k / 161k | **149k** / 156k / 161k |
 
-  Five of six figures are exact; one quartile is $2k low. The strongest upgrade is a deterministic aggregation program running in an
-  attested enclave (e.g. OutLayer on NEAR, which can decrypt sealed inputs in a TEE and is callable
-  from a contract), with the same on-chain checks. Not built.
+  Five of six figures are exact; one quartile is $2k low.
+
+  **The deterministic fix is written but not live.** `enclave/` is a Rust program for OutLayer's
+  Intel TDX workers that does the same job with plain code instead of a model. It derives a
+  per-round X25519 key inside the TEE (an HMAC under a key OutLayer issues only to this exact wasm
+  when called by this contract), publishes only the public half, opens each record (bound to its
+  round), and computes numpy-style percentiles. Its unit tests pass, including the quartile above
+  (151k, where the model said 149k). On 14 Nov, three `request_execution` calls to
+  `outlayer.testnet`, with this wasm and with a trivial echo wasm, all timed out without a worker
+  response, so it is not wired into the contract. Next: publish the wasm through FastFS as
+  OutLayer's tooling expects, then have the contract call it at round open (key) and close (bands).
 - **Attestation.** The page and scripts check that the round's key appears in a fresh,
   nonce-bound attestation report. Full verification of the Intel TDX and NVIDIA quotes is left to
   NEAR AI's verifier ([cloud.near.ai/verify](https://cloud.near.ai/verify)); it is not
@@ -174,6 +182,7 @@ Open `https://aditya-galaxy.github.io/payband/?round=my-round` to watch it, then
 ```
 contract/src/lib.rs     rounds, encrypted submissions, publish with on-chain signature + coverage + k checks
 contract/src/tests.rs   19 tests with real ed25519 signatures
+enclave/                deterministic aggregator for OutLayer's TEE (unit-tested; not deployed, see Limits)
 WALKTHROUGH.md          a 2-minute live demo script
 docs/index.html         the page: sign-in, in-browser encryption, bands, in-browser verification
 scripts/e2ee.mjs        NEAR AI E2EE v2 encryption and attestation fetch (Node)
