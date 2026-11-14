@@ -43,7 +43,9 @@ const body = JSON.stringify({
   messages: [{ role: 'system', content: encryptFor(round.model_key, system) },
     ...subs.map(s => ({ role: 'user', content: s.ciphertext })),
     { role: 'user', content: encryptFor(round.model_key, 'All records are above. Output the JSON now.') }],
-  stream: false, temperature: 0, reasoning_effort: process.env.REASONING || 'low',
+  stream: false, temperature: 0,
+  // No reasoning: a model's chain of thought would contain individual salaries, and the reply is made public.
+  chat_template_kwargs: { thinking: false, enable_thinking: false },
 });
 const r = await fetch(`${API}/v1/chat/completions`, { method: 'POST', body, headers: {
   Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', 'Accept-Encoding': 'identity',

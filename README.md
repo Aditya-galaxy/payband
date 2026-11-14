@@ -12,7 +12,7 @@ Built at NEAR HACKATHON (Nov 2026). Track: **Privacy & Private AI**.
 
 - Live page: https://aditya-galaxy.github.io/payband/
 - Contract (testnet): [`payband.testnet`](https://testnet.nearblocks.io/address/payband.testnet)
-- Model: `z-ai/glm-5.3-flash` on [NEAR AI Cloud](https://cloud.near.ai), end-to-end encrypted (protocol v2)
+- Model: `deepseek-ai/DeepSeek-V4.1-Flash-1017`, served by NEAR AI in a TEE on [NEAR AI Cloud](https://cloud.near.ai), end-to-end encrypted (protocol v2), reasoning off
 
 > Same author, separate and independent project in this hackathon (disclosed per rule Q-015):
 > [Sureplate](https://github.com/Aditya-galaxy/sureplate), a device-warranty NFT.
@@ -44,7 +44,8 @@ with everyone's raw salary, or rely on anonymous self-reporting that anyone can 
    groups.
 3. **Aggregate.** After the deadline, `scripts/aggregate.mjs` builds one chat request: an
    encrypted instruction, every on-chain ciphertext verbatim, an encrypted "go". The reply is
-   encrypted to a throwaway client key. The script decrypts it, refuses to publish anything that
+   encrypted to a throwaway client key. Reasoning is switched off, because a chain of thought would
+   contain individual salaries and the reply is made public. The script decrypts the reply, refuses to publish anything that
    is not exactly `{"bands":[...]}` or that contains any number other than the bands, and fetches
    the model's signature over `model:sha256(request):sha256(response)`.
 4. **Publish.** `publish` re-checks on chain: the request contains every stored ciphertext; it is
@@ -104,6 +105,10 @@ Open `https://aditya-galaxy.github.io/payband/?round=my-round` to watch it, then
 
 ## Limits, stated plainly
 
+- **Why this model.** In testing, GLM-5.3 Flash wrote individual salaries into its reasoning, and the
+  publish step's leak check refused it, as designed. With reasoning off, GLM got quartiles wrong.
+  DeepSeek V4.1 Flash with reasoning off was within $1k of exact on the demo data (one quartile
+  rounded down by $1k).
 - **The model does the arithmetic.** A language model can miscompute a percentile. The bands are
   checked against the model's signed reply, not recomputed. A deterministic aggregation program in
   an attested enclave is the obvious next step.

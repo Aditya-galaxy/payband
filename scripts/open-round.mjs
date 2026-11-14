@@ -5,7 +5,7 @@ import { call, view, EXPLORER } from './near.mjs';
 const [roundId, minutes = '6'] = process.argv.slice(2);
 if (!roundId) { console.error('usage: node scripts/open-round.mjs <round_id> [minutes-open]'); process.exit(2); }
 const ADMIN = process.env.ADMIN || 'acme-cam.testnet';
-const MODEL = process.env.MODEL || 'z-ai/glm-5.3-flash';
+const MODEL = process.env.MODEL || 'deepseek-ai/DeepSeek-V4.1-Flash-1017';
 const people = ['ana', 'ben', 'chen', 'dara', 'eli', 'fay', 'gus', 'hana', 'ivo'].map(n => `${n}.acme-cam.testnet`);
 const { candidates } = await attestedKeys(MODEL);
 if (!candidates.length) throw new Error('no attested ed25519 key for ' + MODEL);
