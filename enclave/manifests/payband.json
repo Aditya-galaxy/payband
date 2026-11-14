@@ -1,0 +1,8 @@
+{
+  "display": { "name": "Payband aggregator" },
+  "operations": ["pubkey", "aggregate"],
+  "capabilities": { "network": [] },
+  "encryption_keys": [
+    { "path": "rounds", "bind": "wasm", "caller": "predecessor" }
+  ]
+}
